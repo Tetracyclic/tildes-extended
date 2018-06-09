@@ -1,5 +1,5 @@
 /* globals $ */
-// const clog = console.log.bind(console);
+const clog = console.log.bind(console);
 let labels = {};
 
 chrome.storage.local.get({
@@ -177,24 +177,26 @@ $.fn.colourBrightness = function(){
   return this;
 };
 
-// Workaround to reload the label after a vote/unvote of a comment
-// A better solution would be to listen for XHR requests and detect a response received but apparently
-// either it doesn't work with browser extension injected code or tildes.net use masked request
-const inTopic = window.location.pathname !== '/';
-addVoteListener();
+// Using MutationObserver, detect when the HTML changes and rerun the user labels assignation
+// https://gabrieleromanato.name/jquery-detecting-new-elements-with-the-mutationobserver-object
 
-function addVoteListener() {
-  if(inTopic) {
-    $("a[name=vote]").on('click', () => refreshLabel());
-    $("a[name=unvote]").on('click', () => refreshLabel());
-  }
-}
+const MutationObserver = window.MutationObserver || window.WebKitMutationObserver || window.MozMutationObserver;
+const observer = new MutationObserver(mutations => {
+  clog('comment regenerated', mutations);
+  mutations.forEach(mutation => {
+    if(mutation.addedNodes && mutation.addedNodes.length > 0) {
+      var $nodes = $( mutation.addedNodes ); // jQuery set
+      $nodes.each(() => {
+        if( $(this).hasClass("comment-itself") ) {
+          clog('comment regenerated');
+        }
+      });
+    }
+  });
+});
 
-function refreshLabel() {
-  if(inTopic) {
-    setTimeout(() => {
-      addVoteListener();
-      populateLabels(labels);
-    }, 500); // after 500 msec refresh the labels. most request should complete in <200 msec
-  }
-}
+observer.observe(document.body, {
+	attributes: true,
+	childList: true,
+	characterData: true
+});
